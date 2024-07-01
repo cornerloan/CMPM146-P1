@@ -1,4 +1,5 @@
 from collections import deque
+import math
 
 def find_box_containing_point(point, boxes):
     """Find the box that contains the given point.
@@ -30,58 +31,85 @@ def get_neighbors(box, mesh):
                 neighbors.append(neighbor)
     return neighbors
 
-def find_path (source_point, destination_point, mesh):
-
-    """Searches for a path from source_point to destination_point through the mesh
+def euclidean_distance(point1, point2):
+    """Calculates the euclidean distance between two points.
     Args:
+        point1: first point (x, y)
+        point2: second point (x, y)
+    
+    Returns:
+        distance between the two points"""
+    return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-    source_point: starting point of the pathfinder destination_point: the ultimate goal the pathfinder must reach 
+def find_path(source_point, destination_point, mesh):
+    """Searches for a path from source_point to destination_point through the mesh.
+    Args:
+        source_point: starting point of the pathfinder
+        destination_point: the ultimate goal the pathfinder must reach 
+        mesh: pathway constraints the path adheres to
 
-    mesh: pathway constraints the path adheres to
-
-    Returns:A path (list of points) from source_point to destination_point if exists
-
-    A list of boxes explored by the algorithm"""
-
+    Returns:
+        A path (list of points) from source_point to destination_point if exists
+        A dictionary of boxes explored by the algorithm
+    """
     path = []
     boxes = {}
-    
-    #Step 1: identify source and destination boxes
+    detail_points = {}
+
+    # Step 1: identify source and destination boxes
     source_box = find_box_containing_point(source_point, mesh['boxes'])
     boxes.update({source_box: 'start'})
+    detail_points[source_box] = source_point
     destination_box = find_box_containing_point(destination_point, mesh['boxes'])
     boxes.update({destination_box: 'end'})
+    detail_points[destination_box] = destination_point
 
-    #if no source or destination box was found, no path can be created
+    # if no source or destination box was found, no path can be created
     if not source_box or not destination_box:
         print("No path!")
-        return path, boxes.keys()
+        return path, boxes
 
-    #if the source and destination boxes are the same, we can just create a path between those two points
+    # if the source and destination boxes are the same, we can just create a path between those two points
     if source_box == destination_box:
         path.append(source_point)
         path.append(destination_point)
-        return path, boxes.keys()
+        return path, boxes
 
-    #Step 2: BFS search with boxes (no points yet)
+    # Step 2: BFS search with boxes (no points yet)
     # BFS initialization
     queue = deque([(source_box, [source_box])])
     visited = set()
     visited.add(source_box)
 
     while queue:
-        current_box, path = queue.popleft()
+        current_box, current_path = queue.popleft()
+        boxes.update({current_box: 'visited'})
 
         for neighbor in get_neighbors(current_box, mesh):
             if neighbor not in visited:
-                if neighbor == destination_box:
-                    full_path = path + [neighbor]
-                    return [source_point] + full_path + [destination_point], full_path
-                    
+                # Add current box to set and queue
                 visited.add(neighbor)
-                queue.append((neighbor, path + [neighbor]))
+                queue.append((neighbor, current_path + [neighbor]))
+
+                # Constrain the x, y position within the current box to the bounds of the neighbor box
+                last_point = detail_points[current_box]
+                constrained_point = (
+                    max(neighbor[0], min(neighbor[1], last_point[0])),
+                    max(neighbor[2], min(neighbor[3], last_point[1]))
+                )
+                detail_points[neighbor] = constrained_point
+                
+                # If this neighbor is the destination box we need to return the function
+                if neighbor == destination_box:
+                    full_path = current_path + [neighbor]
+
+                    # Create the final path including detailed points
+                    detailed_path = [source_point]
+                    for box in full_path[1:]:
+                        detailed_path.append(detail_points[box])
+                    detailed_path.append(destination_point)
+
+                    return detailed_path, boxes
 
     print("No path!")
-
-    # Return an empty path and the source and destination boxes if they are found
-    return path, boxes.keys()
+    return path, boxes
