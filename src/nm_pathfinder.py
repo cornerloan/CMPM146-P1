@@ -1,5 +1,7 @@
-from collections import deque
+from collections import deque, defaultdict
 import math
+#import pickle
+from heapq import heappop, heappush
 
 def find_box_containing_point(point, boxes):
     """Find the box that contains the given point.
@@ -41,6 +43,7 @@ def euclidean_distance(point1, point2):
         distance between the two points"""
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
+
 def find_path(source_point, destination_point, mesh):
     """Searches for a path from source_point to destination_point through the mesh.
     Args:
@@ -75,21 +78,35 @@ def find_path(source_point, destination_point, mesh):
         path.append(destination_point)
         return path, boxes
 
-    # Step 2: BFS search with boxes (no points yet)
-    # BFS initialization
-    queue = deque([(source_box, [source_box])])
-    visited = set()
-    visited.add(source_box)
+    # Step 4: A* search with boxes
+    # A* initialization
+    priority_queue = []
+    heappush(priority_queue, (0, source_box))
+    visited = {}
 
-    while queue:
-        current_box, current_path = queue.popleft()
+    # tracking the cost to reach each box
+    cost_to_child = defaultdict(lambda: float('inf'))
+    visited[source_box] = None
+    cost_to_child[source_box] = 0
+
+    # finding the box with the lowest priority
+    while priority_queue:
+        _, current_box = heappop(priority_queue)
         boxes.update({current_box: 'visited'})
 
+        # if destination box is reached
+        if current_box == destination_box:
+            break
+
         for neighbor in get_neighbors(current_box, mesh):
-            if neighbor not in visited:
-                # Add current box to set and queue
-                visited.add(neighbor)
-                queue.append((neighbor, current_path + [neighbor]))
+            new_cost = cost_to_child[current_box] + euclidean_distance(detail_points[current_box], detail_points.get(neighbor, destination_point))
+
+            # if the cost is lower, update the cost and path
+            if new_cost < cost_to_child[neighbor]:
+                cost_to_child[neighbor] = new_cost
+                priority = new_cost + euclidean_distance(detail_points.get(neighbor, destination_point), destination_point)
+                heappush(priority_queue, (priority, neighbor))
+                visited[neighbor] = current_box
 
                 # Constrain the x, y position within the current box to the bounds of the neighbor box
                 last_point = detail_points[current_box]
@@ -98,18 +115,17 @@ def find_path(source_point, destination_point, mesh):
                     max(neighbor[2], min(neighbor[3], last_point[1]))
                 )
                 detail_points[neighbor] = constrained_point
-                
-                # If this neighbor is the destination box we need to return the function
-                if neighbor == destination_box:
-                    full_path = current_path + [neighbor]
 
-                    # Create the final path including detailed points
-                    detailed_path = [source_point]
-                    for box in full_path[1:]:
-                        detailed_path.append(detail_points[box])
-                    detailed_path.append(destination_point)
+    # if no path is found
+    if destination_box not in visited:
+        print("No path!")
+        return path, boxes
 
-                    return detailed_path, boxes
+    # Reconstruct path
+    current_box = destination_box
+    while current_box:
+        path.append(detail_points[current_box])
+        current_box = visited[current_box]
+    path.reverse()
 
-    print("No path!")
     return path, boxes
