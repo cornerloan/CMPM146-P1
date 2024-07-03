@@ -43,18 +43,17 @@ def euclidean_distance(point1, point2):
         distance between the two points"""
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
-
 def find_path(source_point, destination_point, mesh):
     """Searches for a path from source_point to destination_point through the mesh.
     Args:
         source_point: starting point of the pathfinder
-        destination_point: the ultimate goal the pathfinder must reach 
+        destination_point: the ultimate goal the pathfinder must reach
         mesh: pathway constraints the path adheres to
 
     Returns:
         A path (list of points) from source_point to destination_point if exists
-        A dictionary of boxes explored by the algorithm
-    """
+        A dictionary of boxes explored by the algorithm"""
+
     path = []
     boxes = {}
     detail_points = {}
@@ -78,54 +77,89 @@ def find_path(source_point, destination_point, mesh):
         path.append(destination_point)
         return path, boxes
 
-    # Step 4: A* search with boxes
+    # Step 4: Bidirectional A* search with boxes
     # A* initialization
     priority_queue = []
-    heappush(priority_queue, (0, source_box))
-    visited = {}
+    heappush(priority_queue, (0, source_box, 'forward'))
+    heappush(priority_queue, (0, destination_box, 'backward'))
+   
+    visited_forward = {}
+    visited_backward = {}
 
-    # tracking the cost to reach each box
-    cost_to_child = defaultdict(lambda: float('inf'))
-    visited[source_box] = None
-    cost_to_child[source_box] = 0
+    cost_to_child_forward = defaultdict(lambda: float('inf'))
+    cost_to_child_backward = defaultdict(lambda: float('inf'))
+   
+    visited_forward[source_box] = None
+    visited_backward[destination_box] = None
 
-    # finding the box with the lowest priority
+    cost_to_child_forward[source_box] = 0
+    cost_to_child_backward[destination_box] = 0
+
+    meeting_point = None
+
     while priority_queue:
-        _, current_box = heappop(priority_queue)
+        _, current_box, direction = heappop(priority_queue)
         boxes.update({current_box: 'visited'})
 
-        # if destination box is reached
-        if current_box == destination_box:
-            break
+        if direction == 'forward':
+            if current_box in visited_backward:
+                meeting_point = current_box
+                break
 
-        for neighbor in get_neighbors(current_box, mesh):
-            new_cost = cost_to_child[current_box] + euclidean_distance(detail_points[current_box], detail_points.get(neighbor, destination_point))
+            for neighbor in get_neighbors(current_box, mesh):
+                new_cost = cost_to_child_forward[current_box] + euclidean_distance(detail_points[current_box], detail_points.get(neighbor, destination_point))
+                if new_cost < cost_to_child_forward[neighbor]:
+                    cost_to_child_forward[neighbor] = new_cost
+                    priority = new_cost + euclidean_distance(detail_points.get(neighbor, destination_point), destination_point)
+                    heappush(priority_queue, (priority, neighbor, 'forward'))
+                    visited_forward[neighbor] = current_box
 
-            # if the cost is lower, update the cost and path
-            if new_cost < cost_to_child[neighbor]:
-                cost_to_child[neighbor] = new_cost
-                priority = new_cost + euclidean_distance(detail_points.get(neighbor, destination_point), destination_point)
-                heappush(priority_queue, (priority, neighbor))
-                visited[neighbor] = current_box
+                    last_point = detail_points[current_box]
+                    constrained_point = (
+                        max(neighbor[0], min(neighbor[1], last_point[0])),
+                        max(neighbor[2], min(neighbor[3], last_point[1]))
+                    )
+                    detail_points[neighbor] = constrained_point
 
-                # Constrain the x, y position within the current box to the bounds of the neighbor box
-                last_point = detail_points[current_box]
-                constrained_point = (
-                    max(neighbor[0], min(neighbor[1], last_point[0])),
-                    max(neighbor[2], min(neighbor[3], last_point[1]))
-                )
-                detail_points[neighbor] = constrained_point
+        else:  # direction == 'backward'
+            if current_box in visited_forward:
+                meeting_point = current_box
+                break
 
-    # if no path is found
-    if destination_box not in visited:
+            for neighbor in get_neighbors(current_box, mesh):
+                new_cost = cost_to_child_backward[current_box] + euclidean_distance(detail_points[current_box], detail_points.get(neighbor, source_point))
+                if new_cost < cost_to_child_backward[neighbor]:
+                    cost_to_child_backward[neighbor] = new_cost
+                    priority = new_cost + euclidean_distance(detail_points.get(neighbor, source_point), source_point)
+                    heappush(priority_queue, (priority, neighbor, 'backward'))
+                    visited_backward[neighbor] = current_box
+
+                    last_point = detail_points[current_box]
+                    constrained_point = (
+                        max(neighbor[0], min(neighbor[1], last_point[0])),
+                        max(neighbor[2], min(neighbor[3], last_point[1]))
+                    )
+                    detail_points[neighbor] = constrained_point
+
+    # if no meeting point is found
+    if not meeting_point:
         print("No path!")
         return path, boxes
 
     # Reconstruct path
-    current_box = destination_box
+    forward_path = []
+    current_box = meeting_point
     while current_box:
-        path.append(detail_points[current_box])
-        current_box = visited[current_box]
-    path.reverse()
+        forward_path.append(detail_points[current_box])
+        current_box = visited_forward[current_box]
+    forward_path.reverse()
+
+    backward_path = []
+    current_box = meeting_point
+    while current_box:
+        backward_path.append(detail_points[current_box])
+        current_box = visited_backward[current_box]
+
+    path = forward_path + backward_path[1:]  # avoid duplicate meeting point
 
     return path, boxes
