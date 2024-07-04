@@ -77,6 +77,52 @@ def find_path(source_point, destination_point, mesh):
         path.append(destination_point)
         return path, boxes
 
+    '''
+    # Step 2 & 3, BFS working fully
+    # BFS initialization
+    queue = deque([(source_box, [source_box])])
+    visited = set()
+    visited.add(source_box)
+
+    while queue:
+        current_box, current_path = queue.popleft()
+        boxes.update({current_box: 'visited'})
+
+        for neighbor in get_neighbors(current_box, mesh):
+            if neighbor not in visited:
+                # Add current box to set and queue
+
+
+
+                visited.add(neighbor)
+                queue.append((neighbor, current_path + [neighbor]))
+
+                # Constrain the x, y position within the current box to the bounds of the neighbor box
+                last_point = detail_points[current_box]
+                constrained_point = (
+                    max(neighbor[0], min(neighbor[1], last_point[0])),
+                    max(neighbor[2], min(neighbor[3], last_point[1]))
+                )
+                detail_points[neighbor] = constrained_point
+                
+                # If this neighbor is the destination box we need to return the function
+                if neighbor == destination_box:
+                    full_path = current_path + [neighbor]
+
+                    # Create the final path including detailed points
+                    detailed_path = [source_point]
+                    for box in full_path[1:]:
+                        detailed_path.append(detail_points[box])
+                    detailed_path.append(destination_point)
+
+                    return detailed_path, boxes
+
+    print("No path!")
+    return path, boxes
+    '''
+
+
+
     # Step 4: Bidirectional A* search with boxes
     # A* initialization
     priority_queue = []
